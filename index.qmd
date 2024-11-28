@@ -1,0 +1,98 @@
+## Introduction
+
+This article was inspired from a blog [Fast geospatial tasks with data.table, geos & co.](https://grantmcdermott.com/fast-geospatial-datatable-geos/) by Grant R. McDermott on the geographical visualization of data with data.table. We will stay close to the article's major sections with some modifications in the R scripts based on my preferences.
+
+## Setup
+
+Let's load the required R script libraries from CRAN and github:
+
+### Load the Required R Packages from CRAN:
+
+```{r}
+#| warning: false
+#| message: false
+
+library(data.table)
+library(ggplot2)
+library(sf)
+library(kableExtra)
+library(magrittr)
+library(devtools)
+```
+
+### Load the Required R Packages from GitHub:
+
+```{r}
+#| warning: false
+#| message: false
+
+devtools::install_github("deandevl/RspatialPkg")
+```
+
+## Data
+
+Read in the North Carolina shapefile as a simple feature.
+
+```{r}
+nc_shapefile <- system.file("shape/nc.shp", package = "sf")
+nc_sf <- sf::st_read(nc_shapefile) %>% 
+  data.table::as.data.table(.) %>% 
+  .[, .(NAME, CNTY_ID, geometry)] %>% 
+  sf::st_as_sf(.)
+```
+
+```{r}
+#| echo: false
+#| tbl-cap: "First 6 counties of North Carolina simple feature"
+
+kableExtra::kbl(nc_sf[1:6,])
+```
+
+### Map the shapefile
+
+```{r}
+#| fig-width: 14
+#| fig-height: 7
+#| fig-cap: "North Carolina counties"
+
+RspatialPkg::get_geom_sf(sf = nc_sf)
+```
+
+## Perform a grouping of the shapefile with *data.table*
+
+Group by the "CNTY_ID" variable whether it is above or below the value 1980.
+
+```{r}
+nc_grouped_sf <- data.table::as.data.table(nc_sf) %>% 
+  .[, .(geometry = sf::st_union(geometry)), by = .(region = ifelse(CNTY_ID <= 1980, "high", "low"))] %>% 
+  .[, region := as.factor(region)] %>% 
+  sf::st_as_sf(.)
+```
+
+### Map the grouped shapefile
+
+```{r}
+#| fig-width: 14
+#| fig-height: 7
+#| fig-cap: "North Carolina counties grouped by region"
+#| message: false
+
+colors <- c("red","blue")
+names(colors) <- nc_grouped_sf$region
+RspatialPkg::get_geom_sf(
+  sf = nc_grouped_sf, 
+  aes_fill = "region",
+  scale_values = colors,
+  scale_labels = names(colors),
+  hide_x_tics = TRUE,
+  hide_y_tics = TRUE,
+  panel_color = "white",
+  panel_border_color = "white"
+) %>% 
+RspatialPkg::get_geom_sf(
+  sf = nc_sf,
+  sf_alpha = 0,
+  sf_color = "white",
+  sf_linewidth = 1
+)
+```
